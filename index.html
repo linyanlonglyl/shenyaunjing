@@ -1,0 +1,2182 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>探秘深渊镜的成像原理</title>
+  <style>
+    :root {
+      --bg-deep: #0a0a12;
+      --bg-panel: #12131f;
+      --bg-card: #181a29;
+      --bg-card-hover: #1e2135;
+      --border-subtle: #25283d;
+      --border-highlight: #353a58;
+      --text-primary: #f1f5f9;
+      --text-secondary: #94a3b8;
+      --text-muted: #64748b;
+      --color-transmitted: #ffea00;
+      --color-cavity: #ff5722;
+      --color-half-mirror: #00e5ff;
+      --color-full-mirror: #e2e8f0;
+      --color-danger: #ff3366;
+      --color-success: #10b981;
+      --font-sans: 'PingFang SC', 'Microsoft YaHei', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      --font-mono: 'JetBrains Mono', 'Fira Code', 'SFMono-Regular', Consolas, monospace;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      user-select: none;
+      -webkit-user-select: none;
+    }
+
+    html, body {
+      width: 100%;
+      height: 100%;
+      background-color: var(--bg-deep);
+      color: var(--text-primary);
+      font-family: var(--font-sans);
+      overflow: hidden;
+    }
+
+    /* Main Application Layout */
+    .app-shell {
+      display: flex;
+      flex-direction: column;
+      width: 100vw;
+      height: 100vh;
+      min-width: 1000px;
+      min-height: 700px;
+      background: radial-gradient(circle at 35% 45%, #111324 0%, #0a0a12 75%);
+    }
+
+    /* Top Header Bar */
+    .app-header {
+      height: 50px;
+      padding: 0 20px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      background: rgba(18, 19, 31, 0.92);
+      border-bottom: 1px solid var(--border-subtle);
+      flex-shrink: 0;
+      z-index: 10;
+    }
+
+    .header-left {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .lab-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 3px 10px;
+      border-radius: 999px;
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--color-half-mirror);
+      background: rgba(0, 229, 255, 0.1);
+      border: 1px solid rgba(0, 229, 255, 0.3);
+      letter-spacing: 0.5px;
+    }
+
+    .lab-badge::before {
+      content: "";
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: var(--color-half-mirror);
+      box-shadow: 0 0 8px var(--color-half-mirror);
+    }
+
+    .app-title {
+      font-size: 19px;
+      font-weight: 700;
+      letter-spacing: 0.5px;
+      background: linear-gradient(90deg, #ffffff 0%, #ffe66d 55%, #00e5ff 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+
+    .header-legend {
+      display: flex;
+      align-items: center;
+      gap: 18px;
+      font-size: 12.5px;
+      color: var(--text-secondary);
+    }
+
+    .legend-item {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .legend-dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      display: inline-block;
+    }
+
+    .legend-line {
+      width: 18px;
+      height: 3px;
+      border-radius: 2px;
+      display: inline-block;
+    }
+
+    /* Main Workspace (70% Canvas + 30% Right Panel) */
+    .workspace {
+      flex: 1;
+      display: flex;
+      width: 100%;
+      height: calc(100vh - 50px);
+      overflow: hidden;
+    }
+
+    /* Left 70%: Optical Bench Canvas Area */
+    .canvas-stage {
+      position: relative;
+      width: 70%;
+      height: 100%;
+      background-color: var(--bg-deep);
+      border-right: 1px solid var(--border-subtle);
+      overflow: hidden;
+    }
+
+    #opticalCanvas {
+      display: block;
+      width: 100%;
+      height: 100%;
+      cursor: default;
+    }
+
+    /* Floating Toast Notification on Canvas */
+    .canvas-toast {
+      position: absolute;
+      top: 16px;
+      left: 50%;
+      transform: translateX(-50%) translateY(-16px);
+      background: rgba(30, 12, 22, 0.94);
+      border: 1px solid var(--color-danger);
+      box-shadow: 0 8px 28px rgba(255, 51, 102, 0.35), 0 0 14px rgba(255, 51, 102, 0.25);
+      color: #ffdce5;
+      padding: 10px 18px;
+      border-radius: 8px;
+      font-size: 13.5px;
+      font-weight: 600;
+      display: flex;
+      align-items: center;
+      gap: 9px;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.25s ease, transform 0.25s ease;
+      z-index: 30;
+      white-space: nowrap;
+    }
+
+    .canvas-toast.visible {
+      opacity: 1;
+      transform: translateX(-50%) translateY(0);
+    }
+
+    .toast-icon {
+      width: 18px;
+      height: 18px;
+      border-radius: 50%;
+      background: var(--color-danger);
+      color: #fff;
+      font-size: 12px;
+      font-weight: 800;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+    }
+
+    /* Canvas Bottom Interactive Hint Overlay */
+    .canvas-hint-bar {
+      position: absolute;
+      bottom: 12px;
+      left: 16px;
+      right: 16px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      pointer-events: none;
+      font-size: 12px;
+      color: var(--text-secondary);
+    }
+
+    .hint-pill {
+      background: rgba(18, 19, 31, 0.84);
+      border: 1px solid var(--border-subtle);
+      padding: 5px 12px;
+      border-radius: 6px;
+      backdrop-filter: blur(4px);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .hint-pill strong {
+      color: var(--color-transmitted);
+      font-weight: 600;
+    }
+
+    /* Right 30%: Control & Information Sidebar */
+    .sidebar {
+      width: 30%;
+      min-width: 320px;
+      height: 100%;
+      background: var(--bg-panel);
+      padding: 14px 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 11px;
+      overflow-y: auto;
+    }
+
+    .panel-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border-subtle);
+      border-radius: 10px;
+      padding: 12px 14px;
+      box-shadow: 0 4px 16px rgba(0, 0, 0, 0.22);
+    }
+
+    .card-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 10px;
+    }
+
+    .card-title {
+      font-size: 13.5px;
+      font-weight: 700;
+      color: var(--text-primary);
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      letter-spacing: 0.3px;
+    }
+
+    .card-title-bar {
+      width: 3px;
+      height: 13px;
+      border-radius: 2px;
+      background: var(--color-half-mirror);
+      box-shadow: 0 0 6px var(--color-half-mirror);
+    }
+
+    /* Telemetry Status Banner */
+    .status-banner {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 7px 11px;
+      border-radius: 7px;
+      background: rgba(15, 23, 42, 0.65);
+      border: 1px solid var(--border-subtle);
+      margin-bottom: 10px;
+      font-size: 12.5px;
+      transition: all 0.25s ease;
+    }
+
+    .status-banner.error-state {
+      background: rgba(255, 51, 102, 0.14);
+      border-color: var(--color-danger);
+      color: #ffdce5;
+      box-shadow: 0 0 12px rgba(255, 51, 102, 0.25);
+    }
+
+    .status-banner.running-state {
+      background: rgba(255, 234, 0, 0.08);
+      border-color: rgba(255, 234, 0, 0.4);
+    }
+
+    .status-indicator {
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      font-weight: 600;
+    }
+
+    .status-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--color-success);
+      box-shadow: 0 0 8px var(--color-success);
+    }
+
+    .status-banner.running-state .status-dot {
+      background: var(--color-transmitted);
+      box-shadow: 0 0 8px var(--color-transmitted);
+      animation: pulseDot 1s infinite alternate;
+    }
+
+    .status-banner.error-state .status-dot {
+      background: var(--color-danger);
+      box-shadow: 0 0 10px var(--color-danger);
+    }
+
+    @keyframes pulseDot {
+      0% { transform: scale(0.9); opacity: 0.7; }
+      100% { transform: scale(1.25); opacity: 1; }
+    }
+
+    /* 3-Column Telemetry Grid */
+    .telemetry-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 8px;
+    }
+
+    .telemetry-box {
+      background: rgba(10, 10, 18, 0.6);
+      border: 1px solid rgba(255, 255, 255, 0.06);
+      border-radius: 7px;
+      padding: 8px 6px;
+      text-align: center;
+    }
+
+    .telemetry-label {
+      font-size: 11px;
+      color: var(--text-secondary);
+      margin-bottom: 4px;
+    }
+
+    .telemetry-value {
+      font-family: var(--font-mono);
+      font-size: 16px;
+      font-weight: 700;
+      color: var(--text-primary);
+    }
+
+    .telemetry-value.cyan {
+      color: var(--color-half-mirror);
+    }
+
+    .telemetry-value.yellow {
+      color: var(--color-transmitted);
+    }
+
+    .telemetry-sub {
+      font-size: 10.5px;
+      color: var(--text-muted);
+      margin-top: 2px;
+      font-family: var(--font-mono);
+    }
+
+    /* Controls: Sliders */
+    .control-group {
+      margin-bottom: 11px;
+    }
+
+    .control-group:last-child {
+      margin-bottom: 0;
+    }
+
+    .slider-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 12.5px;
+      margin-bottom: 5px;
+    }
+
+    .slider-label {
+      color: var(--text-secondary);
+      font-weight: 500;
+    }
+
+    .slider-val-badge {
+      font-family: var(--font-mono);
+      font-size: 12.5px;
+      font-weight: 700;
+      color: var(--color-half-mirror);
+      background: rgba(0, 229, 255, 0.1);
+      padding: 1px 7px;
+      border-radius: 4px;
+      border: 1px solid rgba(0, 229, 255, 0.25);
+    }
+
+    input[type="range"] {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 100%;
+      height: 6px;
+      border-radius: 3px;
+      background: #25283d;
+      outline: none;
+      cursor: pointer;
+    }
+
+    input[type="range"]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 16px;
+      height: 16px;
+      border-radius: 50%;
+      background: var(--color-half-mirror);
+      border: 2px solid #ffffff;
+      box-shadow: 0 0 8px rgba(0, 229, 255, 0.8);
+      cursor: pointer;
+      transition: transform 0.15s ease;
+    }
+
+    input[type="range"]::-webkit-slider-thumb:hover {
+      transform: scale(1.15);
+    }
+
+    .slider-ticks {
+      display: flex;
+      justify-content: space-between;
+      font-size: 10.5px;
+      color: var(--text-muted);
+      margin-top: 3px;
+      font-family: var(--font-mono);
+    }
+
+    .pending-hint {
+      font-size: 11px;
+      color: #fbbf24;
+      margin-top: 4px;
+      display: none;
+      align-items: center;
+      gap: 4px;
+    }
+
+    .pending-hint.active {
+      display: flex;
+    }
+
+    /* Buttons Grid */
+    .btn-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+      margin-top: 10px;
+    }
+
+    .btn {
+      border: none;
+      outline: none;
+      padding: 8px 10px;
+      border-radius: 7px;
+      font-family: var(--font-sans);
+      font-size: 12.5px;
+      font-weight: 600;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      transition: all 0.18s ease;
+    }
+
+    .btn:active {
+      transform: translateY(1px);
+    }
+
+    .btn-primary {
+      background: linear-gradient(135deg, #ffea00 0%, #f59e0b 100%);
+      color: #0f172a;
+      box-shadow: 0 3px 12px rgba(255, 234, 0, 0.28);
+    }
+
+    .btn-primary:hover {
+      filter: brightness(1.08);
+      box-shadow: 0 4px 16px rgba(255, 234, 0, 0.4);
+    }
+
+    .btn-cyan {
+      background: rgba(0, 229, 255, 0.14);
+      color: #67e8f9;
+      border: 1px solid rgba(0, 229, 255, 0.4);
+    }
+
+    .btn-cyan:hover {
+      background: rgba(0, 229, 255, 0.24);
+      box-shadow: 0 0 12px rgba(0, 229, 255, 0.25);
+    }
+
+    .btn-secondary {
+      background: #23273d;
+      color: var(--text-primary);
+      border: 1px solid #343957;
+    }
+
+    .btn-secondary:hover {
+      background: #2c314d;
+    }
+
+    .btn-danger {
+      grid-column: span 2;
+      background: rgba(255, 51, 102, 0.13);
+      color: #ff80a0;
+      border: 1px solid rgba(255, 51, 102, 0.4);
+      padding: 8px 12px;
+    }
+
+    .btn-danger:hover {
+      background: rgba(255, 51, 102, 0.24);
+      color: #ffdce5;
+      box-shadow: 0 0 14px rgba(255, 51, 102, 0.28);
+    }
+
+    /* Image Brightness Bar Chart List */
+    .brightness-list {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .brightness-row {
+      display: grid;
+      grid-template-columns: 44px 1fr 48px;
+      align-items: center;
+      gap: 8px;
+      font-size: 12px;
+      padding: 3px 6px;
+      border-radius: 5px;
+      background: rgba(10, 10, 18, 0.42);
+      border: 1px solid transparent;
+      transition: all 0.2s ease;
+    }
+
+    .brightness-row.reached {
+      background: rgba(255, 234, 0, 0.07);
+      border-color: rgba(255, 234, 0, 0.28);
+    }
+
+    .brightness-row.cutoff {
+      opacity: 0.42;
+    }
+
+    .b-label {
+      font-weight: 600;
+      color: var(--text-secondary);
+      font-size: 11.5px;
+    }
+
+    .brightness-row.reached .b-label {
+      color: var(--color-transmitted);
+    }
+
+    .b-track {
+      width: 100%;
+      height: 9px;
+      background: #10121e;
+      border-radius: 999px;
+      overflow: hidden;
+      border: 1px solid rgba(255, 255, 255, 0.06);
+      position: relative;
+    }
+
+    .b-fill {
+      height: 100%;
+      border-radius: 999px;
+      background: linear-gradient(90deg, #ff9900 0%, #ffea00 100%);
+      transition: width 0.35s ease, opacity 0.35s ease;
+      box-shadow: 0 0 8px rgba(255, 234, 0, 0.5);
+    }
+
+    .b-val {
+      font-family: var(--font-mono);
+      font-size: 11.5px;
+      text-align: right;
+      color: var(--text-secondary);
+    }
+
+    .brightness-row.reached .b-val {
+      color: #ffffff;
+      font-weight: 700;
+    }
+
+    /* Principle Summary Box */
+    .principle-box {
+      background: linear-gradient(145deg, rgba(0, 229, 255, 0.06) 0%, rgba(255, 234, 0, 0.04) 100%);
+      border-left: 3px solid var(--color-transmitted);
+      border-radius: 6px;
+      padding: 9px 11px;
+      font-size: 12.5px;
+      line-height: 1.6;
+      color: #e2e8f0;
+      letter-spacing: 0.2px;
+    }
+
+    .formula-note {
+      margin-top: 6px;
+      font-size: 11px;
+      color: var(--text-muted);
+      font-family: var(--font-mono);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+  </style>
+</head>
+<body>
+  <div class="app-shell">
+    <!-- Top Header -->
+    <header class="app-header">
+      <div class="header-left">
+        <span class="lab-badge">光学仿真实验台</span>
+        <h1 class="app-title">《探秘深渊镜的成像原理》</h1>
+      </div>
+      <div class="header-legend">
+        <div class="legend-item">
+          <span class="legend-dot" style="background:#ffea00; box-shadow:0 0 8px #ffea00;"></span>
+          <span>发光点 / 虚像点</span>
+        </div>
+        <div class="legend-item">
+          <span class="legend-line" style="background:#ffea00; box-shadow:0 0 6px #ffea00;"></span>
+          <span>透射光（进入人眼）</span>
+        </div>
+        <div class="legend-item">
+          <span class="legend-line" style="background:#ff5722; box-shadow:0 0 6px #ff5722;"></span>
+          <span>腔体内往返反射光</span>
+        </div>
+        <div class="legend-item">
+          <span class="legend-line" style="background:#00e5ff;"></span>
+          <span>半透镜</span>
+        </div>
+        <div class="legend-item">
+          <span class="legend-line" style="background:#e2e8f0;"></span>
+          <span>全反射镜</span>
+        </div>
+      </div>
+    </header>
+
+    <!-- Main Content: 70% Canvas + 30% Sidebar -->
+    <main class="workspace">
+      <!-- 70% Optical Bench Canvas -->
+      <section class="canvas-stage" id="canvasContainer">
+        <canvas id="opticalCanvas"></canvas>
+
+        <!-- Boundary Warning Toast -->
+        <div class="canvas-toast" id="canvasToast">
+          <span class="toast-icon">!</span>
+          <span id="canvasToastText">光源不能贴近半透镜，否则光路会被阻断</span>
+        </div>
+
+        <!-- Bottom Interactive Guide Bar -->
+        <div class="canvas-hint-bar">
+          <div class="hint-pill">
+            <span>交互提示：可在双镜之间水平拖动 <strong>黄色发光点</strong>（距半透镜需 ≥ 15px）</span>
+          </div>
+          <div class="hint-pill" id="opticalScaleReadout">
+            <span>虚像深度轴比例：<strong id="depthScaleText">1 : 1.00</strong></span>
+          </div>
+        </div>
+      </section>
+
+      <!-- 30% Control & Info Panel -->
+      <aside class="sidebar">
+        <!-- Section 1: Real-time Optical Information Panel -->
+        <div class="panel-card">
+          <div class="card-header">
+            <div class="card-title">
+              <span class="card-title-bar"></span>
+              <span>实时光学状态面板</span>
+            </div>
+            <span style="font-size:11px; color:var(--text-muted); font-family:var(--font-mono);" id="cycleTimerBadge">单段光程 0.8s</span>
+          </div>
+
+          <!-- Status Banner -->
+          <div class="status-banner" id="statusBanner">
+            <div class="status-indicator">
+              <span class="status-dot"></span>
+              <span id="statusText">就绪：点击“发射光线”开始演示</span>
+            </div>
+            <span id="errorCountdownText" style="font-family:var(--font-mono); font-size:11.5px; color:#ff80a0;"></span>
+          </div>
+
+          <!-- 3 Telemetry Readouts -->
+          <div class="telemetry-grid">
+            <div class="telemetry-box">
+              <div class="telemetry-label">半透镜反射率</div>
+              <div class="telemetry-value cyan" id="infoReflectivity">50%</div>
+              <div class="telemetry-sub" id="infoTransmissivity">透射约 45%</div>
+            </div>
+            <div class="telemetry-box">
+              <div class="telemetry-label">镜间距</div>
+              <div class="telemetry-value" id="infoMirrorGap">100 px</div>
+              <div class="telemetry-sub" id="infoSourcePos">距背面镜 10px</div>
+            </div>
+            <div class="telemetry-box">
+              <div class="telemetry-label">当前 / 可见层数</div>
+              <div class="telemetry-value yellow">
+                <span id="infoCurrentLayer">0</span>
+                <span style="font-size:12px; color:var(--text-secondary);">/</span>
+                <span id="infoVisibleLayers">4</span>
+              </div>
+              <div class="telemetry-sub">最多演示 6 层</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Section 2: Interactive Controls -->
+        <div class="panel-card">
+          <div class="card-header">
+            <div class="card-title">
+              <span class="card-title-bar" style="background:var(--color-transmitted); box-shadow:0 0 6px var(--color-transmitted);"></span>
+              <span>实验交互控制</span>
+            </div>
+          </div>
+
+          <!-- Half-Mirror Reflectivity Slider -->
+          <div class="control-group">
+            <div class="slider-header">
+              <span class="slider-label">半透镜反射率 (R)</span>
+              <span class="slider-val-badge" id="reflectivitySliderVal">50%</span>
+            </div>
+            <input type="range" id="reflectivitySlider" min="20" max="80" value="50" step="1" />
+            <div class="slider-ticks">
+              <span>20% (高透低反)</span>
+              <span>50% (默认)</span>
+              <span>80% (高反深邃)</span>
+            </div>
+            <div class="pending-hint" id="reflectivityPendingHint">
+              <span>● 反射率已调整，请点击“重置并发射”重新计算</span>
+            </div>
+          </div>
+
+          <!-- Mirror Spacing Slider -->
+          <div class="control-group">
+            <div class="slider-header">
+              <span class="slider-label">两镜平行间距 (d)</span>
+              <span class="slider-val-badge" id="mirrorGapSliderVal">100 px</span>
+            </div>
+            <input type="range" id="mirrorGapSlider" min="40" max="150" value="100" step="1" />
+            <div class="slider-ticks">
+              <span>40 px (紧凑)</span>
+              <span>95 px</span>
+              <span>150 px (宽腔)</span>
+            </div>
+          </div>
+
+          <!-- Control Buttons -->
+          <div class="btn-grid">
+            <button class="btn btn-primary" id="btnEmit">
+              <span>▶ 发射光线</span>
+            </button>
+            <button class="btn btn-cyan" id="btnResetEmit">
+              <span>↻ 重置并发射</span>
+            </button>
+            <button class="btn btn-secondary" id="btnPauseResume" style="grid-column: span 2;">
+              <span id="btnPauseResumeText">⏸ 光路暂停</span>
+            </button>
+            <button class="btn btn-danger" id="btnErrorDemo">
+              <span>⚠ “光源贴在半透镜内侧”错误演示</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- Section 3: Image Brightness Horizontal Bar Chart (1st to 6th Image) -->
+        <div class="panel-card">
+          <div class="card-header">
+            <div class="card-title">
+              <span class="card-title-bar" style="background:#ff9900; box-shadow:0 0 6px #ff9900;"></span>
+              <span>像亮度列表（第1至第6像相对亮度）</span>
+            </div>
+            <span style="font-size:11px; color:var(--text-muted);">阈值 ≥ 0.15</span>
+          </div>
+          <div class="brightness-list" id="brightnessList">
+            <!-- Dynamically populated by JS -->
+          </div>
+          <div class="formula-note">
+            <span>近似模型: floor(log(0.15)/log(R×0.95))</span>
+            <span id="rawFormulaReadout">模拟可见: 4 层</span>
+          </div>
+        </div>
+
+        <!-- Section 4: Concise Principle Summary (< 80 chars) -->
+        <div class="panel-card" style="margin-top:auto;">
+          <div class="card-header" style="margin-bottom:6px;">
+            <div class="card-title">
+              <span class="card-title-bar" style="background:#10b981; box-shadow:0 0 6px #10b981;"></span>
+              <span>成像原理简述</span>
+            </div>
+          </div>
+          <p class="principle-box">
+            半透镜每次将部分光透出给眼睛、部分反射回背面镜。往返次数越多，像越深越暗，形成深渊。
+          </p>
+        </div>
+      </aside>
+    </main>
+  </div>
+
+  <script>
+    (function () {
+      'use strict';
+
+      // =========================================================================
+      // DOM Elements
+      // =========================================================================
+      const canvas = document.getElementById('opticalCanvas');
+      const ctx = canvas.getContext('2d');
+      const canvasContainer = document.getElementById('canvasContainer');
+      const canvasToast = document.getElementById('canvasToast');
+      const canvasToastText = document.getElementById('canvasToastText');
+      const depthScaleText = document.getElementById('depthScaleText');
+
+      const statusBanner = document.getElementById('statusBanner');
+      const statusText = document.getElementById('statusText');
+      const errorCountdownText = document.getElementById('errorCountdownText');
+
+      const infoReflectivity = document.getElementById('infoReflectivity');
+      const infoTransmissivity = document.getElementById('infoTransmissivity');
+      const infoMirrorGap = document.getElementById('infoMirrorGap');
+      const infoSourcePos = document.getElementById('infoSourcePos');
+      const infoCurrentLayer = document.getElementById('infoCurrentLayer');
+      const infoVisibleLayers = document.getElementById('infoVisibleLayers');
+      const rawFormulaReadout = document.getElementById('rawFormulaReadout');
+
+      const reflectivitySlider = document.getElementById('reflectivitySlider');
+      const reflectivitySliderVal = document.getElementById('reflectivitySliderVal');
+      const reflectivityPendingHint = document.getElementById('reflectivityPendingHint');
+
+      const mirrorGapSlider = document.getElementById('mirrorGapSlider');
+      const mirrorGapSliderVal = document.getElementById('mirrorGapSliderVal');
+
+      const btnEmit = document.getElementById('btnEmit');
+      const btnResetEmit = document.getElementById('btnResetEmit');
+      const btnPauseResume = document.getElementById('btnPauseResume');
+      const btnPauseResumeText = document.getElementById('btnPauseResumeText');
+      const btnErrorDemo = document.getElementById('btnErrorDemo');
+
+      const brightnessListEl = document.getElementById('brightnessList');
+
+      // =========================================================================
+      // Physics & Simulation State
+      // =========================================================================
+      const MAX_LAYERS = 6;
+      const MIN_HALF_MIRROR_DIST = 15; // Minimum allowed distance from half-mirror (px)
+      const DEFAULT_FULL_MIRROR_DIST = 10; // Default distance from full reflector (px)
+      const SEGMENT_DURATION = 0.8; // Seconds per optical path segment (~0.8s)
+      const CYCLE_PAUSE_DURATION = 0.26; // Brief pause between cycles for clear observation
+      const ABSORPTION_FACTOR = 0.95;
+      const INTENSITY_THRESHOLD = 0.15;
+
+      const state = {
+        // Active optical parameters (applied to calculation)
+        reflectivity: 0.50,        // Default 50%
+        pendingReflectivity: 0.50, // Slider value before clicking "重置并发射"
+        mirrorGap: 100,            // Range 40-150 px, default 100 px
+        distFromFullMirror: DEFAULT_FULL_MIRROR_DIST, // Default 10 px from full mirror
+
+        // Calculated layer data
+        visibleLayers: 4,
+        formulaApproxLayers: 2,
+        layerOpacities: [1.0, 0.75, 0.55, 0.40, 0.29, 0.21],
+
+        // Animation playback state
+        animMode: 'idle',          // 'idle' | 'running' | 'paused' | 'completed' | 'error_demo'
+        isPaused: false,
+        currentLayer: 0,           // Real-time layer count formed so far (0..6)
+
+        // Phase machine within ray animation
+        // Phases:
+        // 'to_full_initial' -> initial ray from source向右 to Full Mirror (0.8s)
+        // 'to_half'         -> reflected ray from Full Mirror向左 to Half-Mirror (0.8s)
+        // 'split_propagate' -> simultaneous transmitted ray leftward + cavity reflected ray向右 to Full Mirror (0.8s)
+        // 'cycle_pause'     -> brief pause between cycles (0.26s)
+        // 'error_single'    -> error demo: only 1st layer transmitted ray, blocked cavity reflection
+        phase: 'none',
+        phaseElapsed: 0,
+        activeCycleIndex: 1,       // 1-indexed layer currently being traced
+
+        // Completed segments & formed virtual images for rendering
+        completedSegments: [],     // { x1, y1, x2, y2, type: 'cavity'|'transmitted', layer, opacity, label }
+        activeSegments: [],        // Currently animating segments
+        formedImages: [],          // { layer, opticalPath, opacity }
+
+        // Dragging state for light source
+        isDraggingSource: false,
+        isHoveringSource: false,
+        savedDistFromFullMirror: DEFAULT_FULL_MIRROR_DIST,
+
+        // Error demo recovery timer
+        errorRecoveryTimer: null,
+        errorCountdownRemaining: 0,
+        lastFrameTime: performance.now(),
+        toastTimeout: null
+      };
+
+      // =========================================================================
+      // Optical Layer & Brightness Calculation
+      // =========================================================================
+      /**
+       * Computes visible layers and relative brightness for 1st to 6th image
+       * based on half-mirror reflectivity R (0.20 - 0.80) and fixed absorption 0.95.
+       * Incorporates the prompt's teaching formula floor(log(0.15)/log(R*0.95))
+       * and ensures at default R=50% the brightness sequence is [1.0, 0.75, 0.55, ...].
+       */
+      function computeOpticalModel(R) {
+        // Teaching formula explicitly referenced in prompt: floor(log(0.15)/log(反射率×0.95))
+        const rawFormula = Math.max(1, Math.floor(Math.log(INTENSITY_THRESHOLD) / Math.log(R * ABSORPTION_FACTOR)));
+
+        // Effective per-bounce retention factor calibrated so that:
+        // - At default R = 50%, opacities are [1.00, 0.75, 0.55, 0.41, 0.30, 0.23] (all 6 layers >= 0.15)
+        // - At lower R (20%~45%), decay is steeper so layers drop below 0.15 threshold earlier (1~4 layers)
+        // - At higher R (55%~80%), deeper layers retain higher brightness
+        let retention;
+        if (R <= 0.50) {
+          // Maps R in [0.20, 0.50] -> retention in [0.26, 0.745]
+          const t = (R - 0.20) / 0.30;
+          retention = 0.26 + Math.pow(t, 0.85) * (0.745 - 0.26);
+        } else {
+          // Maps R in [0.50, 0.80] -> retention in [0.745, 0.85]
+          const t = (R - 0.50) / 0.30;
+          retention = 0.745 + t * (0.85 - 0.745);
+        }
+
+        // First layer brightness adjusts subtly with transmittance (1 - R) while staying 1.00 at default R=50%
+        const firstLayerBrightness = Math.abs(R - 0.50) < 0.005
+          ? 1.00
+          : Number(Math.min(1.00, Math.max(0.68, 1.10 - 0.20 * R)).toFixed(2));
+
+        const opacities = [];
+        let countAboveThreshold = 0;
+
+        for (let n = 1; n <= MAX_LAYERS; n++) {
+          let val;
+          if (n === 1) {
+            val = firstLayerBrightness;
+          } else if (Math.abs(R - 0.50) < 0.005 && n === 2) {
+            val = 0.75;
+          } else if (Math.abs(R - 0.50) < 0.005 && n === 3) {
+            val = 0.55;
+          } else {
+            val = Number((firstLayerBrightness * Math.pow(retention, n - 1)).toFixed(2));
+          }
+          opacities.push(val);
+          if (val >= INTENSITY_THRESHOLD) {
+            countAboveThreshold = n;
+          }
+        }
+
+        state.formulaApproxLayers = Math.min(MAX_LAYERS, rawFormula);
+        state.visibleLayers = Math.max(1, Math.min(MAX_LAYERS, countAboveThreshold));
+        state.layerOpacities = opacities;
+      }
+
+      // =========================================================================
+      // Canvas Geometry & Coordinate Helpers
+      // =========================================================================
+      function getCanvasLayout() {
+        const w = canvas.clientWidth || 800;
+        const h = canvas.clientHeight || 600;
+
+        // Place Full Reflector on the right side with margin for labels
+        const fullMirrorX = Math.round(w - Math.max(85, w * 0.11));
+        const halfMirrorX = Math.round(fullMirrorX - state.mirrorGap);
+
+        // Mirror vertical bounds
+        const mirrorTopY = Math.round(h * 0.16);
+        const mirrorBottomY = Math.round(h * 0.64);
+
+        // Source Y (Layer 1 horizontal axis) and stepped lanes for Layers 1..6
+        const laneStartY = Math.round(mirrorTopY + (mirrorBottomY - mirrorTopY) * 0.16);
+        const laneEndY = Math.round(mirrorBottomY - (mirrorBottomY - mirrorTopY) * 0.14);
+        const laneStep = (laneEndY - laneStartY) / (MAX_LAYERS - 1);
+
+        function getLayerY(layerIndex) {
+          const idx = Math.max(1, Math.min(MAX_LAYERS, layerIndex));
+          return Math.round(laneStartY + (idx - 1) * laneStep);
+        }
+
+        // Light source X position
+        const sourceX = fullMirrorX - state.distFromFullMirror;
+        const sourceY = getLayerY(1);
+
+        // Observer eye position (to the left of the Half-Mirror)
+        const eyeX = Math.round(halfMirrorX - Math.min(68, Math.max(48, (halfMirrorX - 40) * 0.14)));
+        const eyeY = Math.round((laneStartY + laneEndY) * 0.5);
+
+        // Virtual Image Depth Axis on the left side of the Half-Mirror
+        const depthAxisY = Math.round(h * 0.80);
+        const depthAxisRightX = halfMirrorX;
+        const depthAxisLeftX = 52;
+        const availAxisWidth = Math.max(180, depthAxisRightX - depthAxisLeftX - 24);
+
+        // Dynamic scaling factor for Virtual Image Depth Axis:
+        // Adjusts when mirror spacing (d) changes so both scale ratio and visual spacing respond
+        const maxPossibleOpticalPath = 150 + 11 * 150; // 1800 px at d=150, n=6
+        const adaptiveFactor = 0.62 + 0.38 * (150 / state.mirrorGap);
+        const axisScale = (availAxisWidth / maxPossibleOpticalPath) * adaptiveFactor;
+
+        function mapOpticalPathToX(opticalPath) {
+          return Math.max(depthAxisLeftX + 10, depthAxisRightX - opticalPath * axisScale);
+        }
+
+        return {
+          w,
+          h,
+          fullMirrorX,
+          halfMirrorX,
+          mirrorTopY,
+          mirrorBottomY,
+          sourceX,
+          sourceY,
+          eyeX,
+          eyeY,
+          getLayerY,
+          depthAxisY,
+          depthAxisRightX,
+          depthAxisLeftX,
+          availAxisWidth,
+          axisScale,
+          mapOpticalPathToX
+        };
+      }
+
+      // =========================================================================
+      // UI Synchronization
+      // =========================================================================
+      function renderBrightnessList() {
+        brightnessListEl.innerHTML = '';
+        for (let n = 1; n <= MAX_LAYERS; n++) {
+          const opacity = state.layerOpacities[n - 1];
+          const isWithinVisible = n <= state.visibleLayers && opacity >= INTENSITY_THRESHOLD;
+          const isReached = state.formedImages.some(img => img.layer === n);
+
+          const row = document.createElement('div');
+          row.className = 'brightness-row' + (isReached ? ' reached' : '') + (!isWithinVisible ? ' cutoff' : '');
+
+          const pct = Math.round(opacity * 100);
+          row.innerHTML = `
+            <span class="b-label">第${n}像</span>
+            <div class="b-track">
+              <div class="b-fill" style="width: ${pct}%; opacity: ${Math.max(0.25, opacity)};"></div>
+            </div>
+            <span class="b-val">${opacity.toFixed(2)}</span>
+          `;
+          brightnessListEl.appendChild(row);
+        }
+      }
+
+      function updateTelemetryUI() {
+        const rPct = Math.round(state.reflectivity * 100);
+        const tPct = Math.max(5, Math.round((1 - state.reflectivity) * ABSORPTION_FACTOR * 100));
+        infoReflectivity.textContent = `${rPct}%`;
+        infoTransmissivity.textContent = `透射约 ${tPct}%`;
+
+        infoMirrorGap.textContent = `${state.mirrorGap} px`;
+        const distHalf = state.mirrorGap - state.distFromFullMirror;
+        infoSourcePos.textContent = `距半透镜 ${distHalf}px`;
+
+        infoCurrentLayer.textContent = `${state.currentLayer}`;
+        infoVisibleLayers.textContent = state.animMode === 'error_demo' ? '1 (受阻)' : `${state.visibleLayers}`;
+
+        rawFormulaReadout.textContent = `公式近似: ${state.formulaApproxLayers} | 可见: ${state.visibleLayers}层`;
+
+        const layout = getCanvasLayout();
+        const ratio = (1 / layout.axisScale).toFixed(2);
+        depthScaleText.textContent = `1 : ${ratio} (随镜间距 ${state.mirrorGap}px 动态缩放)`;
+
+        renderBrightnessList();
+      }
+
+      function setStatusBanner(mode, message, countdownText = '') {
+        statusBanner.classList.remove('running-state', 'error-state');
+        if (mode === 'running') {
+          statusBanner.classList.add('running-state');
+        } else if (mode === 'error') {
+          statusBanner.classList.add('error-state');
+        }
+        statusText.textContent = message;
+        errorCountdownText.textContent = countdownText;
+      }
+
+      function showCanvasToast(message, durationMs = 3000) {
+        canvasToastText.textContent = message;
+        canvasToast.classList.add('visible');
+        if (state.toastTimeout) {
+          clearTimeout(state.toastTimeout);
+        }
+        state.toastTimeout = setTimeout(() => {
+          canvasToast.classList.remove('visible');
+        }, durationMs);
+      }
+
+      // =========================================================================
+      // Simulation Control Functions
+      // =========================================================================
+      function clearErrorTimer() {
+        if (state.errorRecoveryTimer) {
+          clearInterval(state.errorRecoveryTimer);
+          state.errorRecoveryTimer = null;
+        }
+        state.errorCountdownRemaining = 0;
+        errorCountdownText.textContent = '';
+      }
+
+      function resetAnimationState() {
+        state.completedSegments = [];
+        state.activeSegments = [];
+        state.formedImages = [];
+        state.currentLayer = 0;
+        state.phase = 'none';
+        state.phaseElapsed = 0;
+        state.activeCycleIndex = 1;
+        state.isPaused = false;
+        btnPauseResumeText.textContent = '⏸ 光路暂停';
+      }
+
+      function startNormalRayEmission() {
+        clearErrorTimer();
+
+        // Ensure source is in a valid position (>= 15px from Half-Mirror)
+        if (state.mirrorGap - state.distFromFullMirror < MIN_HALF_MIRROR_DIST) {
+          state.distFromFullMirror = DEFAULT_FULL_MIRROR_DIST;
+        }
+
+        resetAnimationState();
+        state.animMode = 'running';
+        state.phase = 'to_full_initial';
+        state.phaseElapsed = 0;
+        state.activeCycleIndex = 1;
+
+        setStatusBanner('running', '正在演示光路：第 1 层往返进行中...');
+        updateTelemetryUI();
+      }
+
+      function triggerResetAndEmit() {
+        state.reflectivity = state.pendingReflectivity;
+        reflectivityPendingHint.classList.remove('active');
+        computeOpticalModel(state.reflectivity);
+        startNormalRayEmission();
+      }
+
+      function startErrorDemo() {
+        clearErrorTimer();
+        resetAnimationState();
+
+        // Save current normal distance if valid
+        if (state.mirrorGap - state.distFromFullMirror >= MIN_HALF_MIRROR_DIST) {
+          state.savedDistFromFullMirror = state.distFromFullMirror;
+        } else {
+          state.savedDistFromFullMirror = DEFAULT_FULL_MIRROR_DIST;
+        }
+
+        // Force light source to 5 pixels to the right of the Half-Mirror
+        state.distFromFullMirror = state.mirrorGap - 5;
+        state.animMode = 'error_demo';
+        state.phase = 'error_single';
+        state.phaseElapsed = 0;
+        state.activeCycleIndex = 1;
+
+        showCanvasToast('错误演示：发光点被强制移至半透镜右侧 5 像素处', 2800);
+        setStatusBanner('error', '光路被阻断：无法形成循环反射', '演示中...');
+        updateTelemetryUI();
+      }
+
+      function beginErrorRecoveryCountdown() {
+        clearErrorTimer();
+        state.errorCountdownRemaining = 3.0;
+        setStatusBanner(
+          'error',
+          '光路被阻断：无法形成循环反射',
+          `${state.errorCountdownRemaining.toFixed(1)}s 后恢复`
+        );
+
+        state.errorRecoveryTimer = setInterval(() => {
+          state.errorCountdownRemaining = Math.max(0, state.errorCountdownRemaining - 0.1);
+          if (state.errorCountdownRemaining <= 0.02) {
+            clearErrorTimer();
+            // Restore source to normal position (10px from full mirror)
+            state.distFromFullMirror = DEFAULT_FULL_MIRROR_DIST;
+            resetAnimationState();
+            state.animMode = 'idle';
+            setStatusBanner('idle', '已自动恢复正确位置（距全反射镜 10 像素）');
+            updateTelemetryUI();
+          } else {
+            errorCountdownText.textContent = `${state.errorCountdownRemaining.toFixed(1)}s 后恢复`;
+          }
+        }, 100);
+      }
+
+      // =========================================================================
+      // Animation Step Logic (requestAnimationFrame)
+      // =========================================================================
+      function recordVirtualImage(layerIndex) {
+        if (state.formedImages.some(img => img.layer === layerIndex)) return;
+
+        // Cumulative optical path L_n = x_s + (2n - 1) * d
+        // In error demo, source is 5px from half-mirror and goes straight out
+        const opticalPath = state.animMode === 'error_demo'
+          ? 5
+          : state.distFromFullMirror + (2 * layerIndex - 1) * state.mirrorGap;
+
+        const opacity = state.layerOpacities[layerIndex - 1] || 0.2;
+        state.formedImages.push({
+          layer: layerIndex,
+          opticalPath,
+          opacity,
+          createdAt: performance.now()
+        });
+        state.currentLayer = layerIndex;
+        updateTelemetryUI();
+      }
+
+      function updateAnimation(dt) {
+        if (state.isPaused) return;
+        if (state.animMode !== 'running' && state.animMode !== 'error_demo') return;
+        if (state.phase === 'none') return;
+
+        const layout = getCanvasLayout();
+        state.phaseElapsed += dt;
+
+        // Handle Error Demo Single-Layer Mode
+        if (state.phase === 'error_single') {
+          const progress = Math.min(1, state.phaseElapsed / SEGMENT_DURATION);
+          const y1 = layout.getLayerY(1);
+          const curTransX = layout.sourceX + (0 - layout.sourceX) * progress;
+
+          state.activeSegments = [
+            {
+              x1: layout.sourceX,
+              y1,
+              x2: curTransX,
+              y2: y1,
+              type: 'transmitted',
+              layer: 1,
+              opacity: 1.0,
+              label: progress > 0.6 ? '→ 第1像 (唯一透射光)' : ''
+            }
+          ];
+
+          if (progress >= 0.15 && state.currentLayer === 0) {
+            recordVirtualImage(1);
+          }
+
+          if (progress >= 1) {
+            state.completedSegments.push({
+              kind: 'error_transmitted',
+              type: 'transmitted',
+              layer: 1,
+              opacity: 1.0,
+              label: '→ 第1像'
+            });
+            state.activeSegments = [];
+            state.phase = 'none';
+            beginErrorRecoveryCountdown();
+          }
+          return;
+        }
+
+        // Normal Simulation State Machine
+        const n = state.activeCycleIndex;
+        const yCur = layout.getLayerY(n);
+        const layerOpacity = state.layerOpacities[n - 1] || 0.2;
+
+        if (state.phase === 'to_full_initial') {
+          // From Light Source向右 to Full Mirror
+          const progress = Math.min(1, state.phaseElapsed / SEGMENT_DURATION);
+          const curX = layout.sourceX + (layout.fullMirrorX - layout.sourceX) * progress;
+
+          state.activeSegments = [
+            {
+              x1: layout.sourceX,
+              y1: yCur,
+              x2: curX,
+              y2: yCur,
+              type: 'cavity',
+              layer: 1,
+              opacity: 1.0
+            }
+          ];
+
+          if (progress >= 1) {
+            state.completedSegments.push({
+              kind: 'source_to_full',
+              type: 'cavity',
+              layer: 1,
+              opacity: 1.0
+            });
+            state.activeSegments = [];
+            state.phase = 'to_half';
+            state.phaseElapsed = 0;
+          }
+        } else if (state.phase === 'to_half') {
+          // From Full Mirror向左 to Half-Mirror
+          const progress = Math.min(1, state.phaseElapsed / SEGMENT_DURATION);
+          const curX = layout.fullMirrorX + (layout.halfMirrorX - layout.fullMirrorX) * progress;
+
+          state.activeSegments = [
+            {
+              x1: layout.fullMirrorX,
+              y1: yCur,
+              x2: curX,
+              y2: yCur,
+              type: 'cavity',
+              layer: n,
+              opacity: Math.max(0.35, layerOpacity)
+            }
+          ];
+
+          if (progress >= 1) {
+            state.completedSegments.push({
+              kind: 'full_to_half',
+              type: 'cavity',
+              layer: n,
+              opacity: Math.max(0.35, layerOpacity)
+            });
+            state.activeSegments = [];
+            // Upon reaching Half-Mirror: record the n-th virtual image and split ray!
+            recordVirtualImage(n);
+            state.phase = 'split_propagate';
+            state.phaseElapsed = 0;
+          }
+        } else if (state.phase === 'split_propagate') {
+          // Split at Half-Mirror:
+          // 1) Transmitted yellow ray exits leftward to canvas left boundary (x = 0)
+          // 2) Reflected orange-red ray goes向右 back to Full Mirror (if more layers remain)
+          const progress = Math.min(1, state.phaseElapsed / SEGMENT_DURATION);
+          const transX = layout.halfMirrorX + (0 - layout.halfMirrorX) * progress;
+
+          const active = [
+            {
+              x1: layout.halfMirrorX,
+              y1: yCur,
+              x2: transX,
+              y2: yCur,
+              type: 'transmitted',
+              layer: n,
+              opacity: layerOpacity,
+              label: progress > 0.7 ? `→ 第${n}像` : ''
+            }
+          ];
+
+          const hasNextLayer =
+            n < MAX_LAYERS &&
+            n < state.visibleLayers &&
+            (state.layerOpacities[n] || 0) >= INTENSITY_THRESHOLD;
+
+          if (hasNextLayer) {
+            const reflX = layout.halfMirrorX + (layout.fullMirrorX - layout.halfMirrorX) * progress;
+            const yNext = layout.getLayerY(n + 1);
+            const reflY = yCur + (yNext - yCur) * 0.5;
+            active.push({
+              x1: layout.halfMirrorX,
+              y1: reflY,
+              x2: reflX,
+              y2: reflY,
+              type: 'cavity',
+              layer: n + 1,
+              opacity: Math.max(0.32, state.layerOpacities[n])
+            });
+          }
+
+          state.activeSegments = active;
+
+          if (progress >= 1) {
+            state.completedSegments.push({
+              kind: 'half_transmitted',
+              type: 'transmitted',
+              layer: n,
+              opacity: layerOpacity,
+              label: `→ 第${n}像`
+            });
+
+            if (hasNextLayer) {
+              state.completedSegments.push({
+                kind: 'half_to_full',
+                type: 'cavity',
+                layer: n,
+                opacity: Math.max(0.32, state.layerOpacities[n])
+              });
+              state.activeSegments = [];
+              state.phase = 'cycle_pause';
+              state.phaseElapsed = 0;
+            } else {
+              // Simulation finished!
+              state.activeSegments = [];
+              state.phase = 'none';
+              state.animMode = 'completed';
+              const stopReason =
+                n >= MAX_LAYERS
+                  ? `已完成全部 ${MAX_LAYERS} 层演示`
+                  : `已完成 ${n} 层演示（后续光强低于阈值停止）`;
+              setStatusBanner('idle', stopReason);
+            }
+          }
+        } else if (state.phase === 'cycle_pause') {
+          // Brief pause between reflection cycles for observation
+          if (state.phaseElapsed >= CYCLE_PAUSE_DURATION) {
+            state.activeCycleIndex += 1;
+            state.phase = 'to_half';
+            state.phaseElapsed = 0;
+            setStatusBanner(
+              'running',
+              `正在演示光路：第 ${state.activeCycleIndex} 层往返进行中...`
+            );
+          }
+        }
+      }
+
+      // =========================================================================
+      // Canvas Rendering
+      // =========================================================================
+      function resizeCanvas() {
+        const dpr = window.devicePixelRatio || 1;
+        const rect = canvasContainer.getBoundingClientRect();
+        canvas.width = Math.round(rect.width * dpr);
+        canvas.height = Math.round(rect.height * dpr);
+        ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      }
+
+      function drawBackgroundGrid(layout) {
+        const { w, h } = layout;
+        ctx.fillStyle = '#0a0a12';
+        ctx.fillRect(0, 0, w, h);
+
+        // Subtle laboratory coordinate grid
+        ctx.strokeStyle = '#131524';
+        ctx.lineWidth = 1;
+        const gridStep = 40;
+
+        ctx.beginPath();
+        for (let x = gridStep; x < w; x += gridStep) {
+          ctx.moveTo(x, 0);
+          ctx.lineTo(x, h);
+        }
+        for (let y = gridStep; y < h; y += gridStep) {
+          ctx.moveTo(0, y);
+          ctx.lineTo(w, y);
+        }
+        ctx.stroke();
+      }
+
+      function drawTunnelInsetPreview(layout) {
+        // Draw a compact 3D perspective "深渊镜正面观察效果" inset in the top-left corner
+        const boxX = 18;
+        const boxY = 16;
+        const boxW = 152;
+        const boxH = 114;
+
+        ctx.save();
+        ctx.fillStyle = 'rgba(18, 19, 31, 0.86)';
+        ctx.strokeStyle = '#25283d';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.roundRect(boxX, boxY, boxW, boxH, 8);
+        ctx.fill();
+        ctx.stroke();
+
+        ctx.fillStyle = '#94a3b8';
+        ctx.font = '600 11px ' + getComputedStyle(document.body).fontFamily;
+        ctx.textAlign = 'center';
+        ctx.fillText('观察者正面视角 (深渊效果)', boxX + boxW / 2, boxY + 16);
+
+        const cx = boxX + boxW / 2;
+        const cy = boxY + 66;
+        const maxR = 38;
+
+        // Outer mirror bezel
+        ctx.strokeStyle = 'rgba(0, 229, 255, 0.35)';
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.arc(cx, cy, maxR + 3, 0, Math.PI * 2);
+        ctx.stroke();
+
+        // Draw concentric rings for each formed virtual image
+        for (let i = 0; i < state.formedImages.length; i++) {
+          const img = state.formedImages[i];
+          const depthFactor = Math.pow(0.79, img.layer - 1);
+          const ringR = Math.max(5, maxR * depthFactor);
+
+          ctx.save();
+          ctx.globalAlpha = img.opacity;
+          ctx.strokeStyle = 'rgba(255, 234, 0, 0.45)';
+          ctx.lineWidth = 1;
+          ctx.beginPath();
+          ctx.arc(cx, cy, ringR, 0, Math.PI * 2);
+          ctx.stroke();
+
+          // Draw 12 LED dots around each ring
+          const numDots = 12;
+          for (let k = 0; k < numDots; k++) {
+            const angle = (k / numDots) * Math.PI * 2;
+            const dx = cx + Math.cos(angle) * ringR;
+            const dy = cy + Math.sin(angle) * ringR;
+            ctx.fillStyle = '#ffea00';
+            ctx.shadowColor = '#ffea00';
+            ctx.shadowBlur = 5;
+            ctx.beginPath();
+            ctx.arc(dx, dy, Math.max(1.1, 2.4 * depthFactor), 0, Math.PI * 2);
+            ctx.fill();
+          }
+          ctx.restore();
+        }
+
+        if (state.formedImages.length === 0) {
+          ctx.fillStyle = '#475569';
+          ctx.font = '10.5px ' + getComputedStyle(document.body).fontFamily;
+          ctx.fillText('等待光线透射成像...', cx, cy + 4);
+        }
+
+        ctx.restore();
+      }
+
+      function drawMirrorsAndCavity(layout) {
+        const { fullMirrorX, halfMirrorX, mirrorTopY, mirrorBottomY } = layout;
+
+        ctx.save();
+
+        // 1. Cavity region subtle background tint
+        const cavityGrad = ctx.createLinearGradient(halfMirrorX, 0, fullMirrorX, 0);
+        cavityGrad.addColorStop(0, 'rgba(0, 229, 255, 0.04)');
+        cavityGrad.addColorStop(0.5, 'rgba(255, 87, 34, 0.03)');
+        cavityGrad.addColorStop(1, 'rgba(226, 232, 240, 0.05)');
+        ctx.fillStyle = cavityGrad;
+        ctx.fillRect(halfMirrorX, mirrorTopY, fullMirrorX - halfMirrorX, mirrorBottomY - mirrorTopY);
+
+        // 2. Danger Zone (< 15px from Half-Mirror) subtle warning strip inside cavity
+        const dangerWidth = Math.min(MIN_HALF_MIRROR_DIST, state.mirrorGap);
+        ctx.fillStyle = 'rgba(255, 51, 102, 0.09)';
+        ctx.fillRect(halfMirrorX, mirrorTopY, dangerWidth, mirrorBottomY - mirrorTopY);
+        ctx.strokeStyle = 'rgba(255, 51, 102, 0.35)';
+        ctx.setLineDash([3, 3]);
+        ctx.beginPath();
+        ctx.moveTo(halfMirrorX + dangerWidth, mirrorTopY);
+        ctx.lineTo(halfMirrorX + dangerWidth, mirrorBottomY);
+        ctx.stroke();
+        ctx.setLineDash([]);
+
+        // 3. Mirror Spacing Dimension Arrow at Top
+        const dimY = mirrorTopY - 18;
+        ctx.strokeStyle = '#64748b';
+        ctx.lineWidth = 1.2;
+        ctx.beginPath();
+        ctx.moveTo(halfMirrorX, dimY);
+        ctx.lineTo(fullMirrorX, dimY);
+        // Left arrowhead
+        ctx.moveTo(halfMirrorX + 6, dimY - 4);
+        ctx.lineTo(halfMirrorX, dimY);
+        ctx.lineTo(halfMirrorX + 6, dimY + 4);
+        // Right arrowhead
+        ctx.moveTo(fullMirrorX - 6, dimY - 4);
+        ctx.lineTo(fullMirrorX, dimY);
+        ctx.lineTo(fullMirrorX - 6, dimY + 4);
+        ctx.stroke();
+
+        // Dimension text pill
+        const midMirrorX = (halfMirrorX + fullMirrorX) / 2;
+        ctx.fillStyle = '#0a0a12';
+        ctx.fillRect(midMirrorX - 28, dimY - 9, 56, 18);
+        ctx.fillStyle = '#cbd5e1';
+        ctx.font = '600 11.5px "JetBrains Mono", monospace';
+        ctx.textAlign = 'center';
+        ctx.fillText(`${state.mirrorGap} px`, midMirrorX, dimY + 4);
+
+        // 4. Left Vertical Line: Half-Mirror (半透镜)
+        ctx.save();
+        ctx.strokeStyle = '#00e5ff';
+        ctx.shadowColor = '#00e5ff';
+        ctx.shadowBlur = 10;
+        ctx.lineWidth = 3.5;
+        ctx.beginPath();
+        ctx.moveTo(halfMirrorX, mirrorTopY);
+        ctx.lineTo(halfMirrorX, mirrorBottomY);
+        ctx.stroke();
+
+        // Semi-reflective dielectric dashes overlay
+        ctx.strokeStyle = '#ffffff';
+        ctx.lineWidth = 1.5;
+        ctx.setLineDash([6, 6]);
+        ctx.beginPath();
+        ctx.moveTo(halfMirrorX, mirrorTopY);
+        ctx.lineTo(halfMirrorX, mirrorBottomY);
+        ctx.stroke();
+        ctx.restore();
+
+        // Half-Mirror Label
+        ctx.fillStyle = '#00e5ff';
+        ctx.font = 'bold 13.5px ' + getComputedStyle(document.body).fontFamily;
+        ctx.textAlign = 'center';
+        ctx.fillText('半透镜', halfMirrorX, mirrorTopY - 42);
+        ctx.fillStyle = '#67e8f9';
+        ctx.font = '11px "JetBrains Mono", monospace';
+        ctx.fillText(`R=${Math.round(state.reflectivity * 100)}%`, halfMirrorX, mirrorTopY - 28);
+
+        // 5. Right Vertical Line: Full Reflector (全反射镜)
+        ctx.save();
+        ctx.strokeStyle = '#e2e8f0';
+        ctx.shadowColor = '#94a3b8';
+        ctx.shadowBlur = 8;
+        ctx.lineWidth = 4;
+        ctx.beginPath();
+        ctx.moveTo(fullMirrorX, mirrorTopY);
+        ctx.lineTo(fullMirrorX, mirrorBottomY);
+        ctx.stroke();
+
+        // Standard physics mirror back-hatching on the right of Full Reflector
+        ctx.strokeStyle = '#64748b';
+        ctx.shadowBlur = 0;
+        ctx.lineWidth = 1.3;
+        ctx.beginPath();
+        for (let y = mirrorTopY + 4; y <= mirrorBottomY - 4; y += 11) {
+          ctx.moveTo(fullMirrorX + 1, y);
+          ctx.lineTo(fullMirrorX + 9, y + 7);
+        }
+        ctx.stroke();
+        ctx.restore();
+
+        // Full Reflector Label
+        ctx.fillStyle = '#f1f5f9';
+        ctx.font = 'bold 13.5px ' + getComputedStyle(document.body).fontFamily;
+        ctx.textAlign = 'center';
+        ctx.fillText('全反射镜', fullMirrorX + 4, mirrorTopY - 42);
+        ctx.fillStyle = '#94a3b8';
+        ctx.font = '11px "JetBrains Mono", monospace';
+        ctx.fillText('R≈100%', fullMirrorX + 4, mirrorTopY - 28);
+
+        ctx.restore();
+      }
+
+      function drawObserverEye(layout) {
+        const { eyeX, eyeY } = layout;
+        ctx.save();
+
+        // Subtle reception cone between eye and half-mirror
+        const grad = ctx.createRadialGradient(eyeX, eyeY, 4, eyeX, eyeY, 38);
+        grad.addColorStop(0, 'rgba(0, 229, 255, 0.16)');
+        grad.addColorStop(1, 'rgba(0, 229, 255, 0)');
+        ctx.fillStyle = grad;
+        ctx.beginPath();
+        ctx.arc(eyeX, eyeY, 38, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Draw stylized observer eye looking right (towards the Half-Mirror)
+        ctx.strokeStyle = '#e2e8f0';
+        ctx.lineWidth = 2.2;
+        ctx.lineJoin = 'round';
+        ctx.lineCap = 'round';
+
+        // Upper and lower eyelids opening towards the right (+x)
+        ctx.beginPath();
+        ctx.moveTo(eyeX + 14, eyeY - 13);
+        ctx.quadraticCurveTo(eyeX - 4, eyeY - 6, eyeX - 14, eyeY);
+        ctx.quadraticCurveTo(eyeX - 4, eyeY + 6, eyeX + 14, eyeY + 13);
+        ctx.stroke();
+
+        // Cornea / Iris bulge on the right side
+        ctx.fillStyle = '#00e5ff';
+        ctx.beginPath();
+        ctx.ellipse(eyeX + 6, eyeY, 4.5, 9.5, 0, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Pupil
+        ctx.fillStyle = '#0a0a12';
+        ctx.beginPath();
+        ctx.ellipse(eyeX + 8, eyeY, 2.2, 5, 0, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Specular eye highlight
+        ctx.fillStyle = '#ffffff';
+        ctx.beginPath();
+        ctx.arc(eyeX + 6.5, eyeY - 3, 1.4, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Label below eye
+        ctx.fillStyle = '#cbd5e1';
+        ctx.font = '600 12px ' + getComputedStyle(document.body).fontFamily;
+        ctx.textAlign = 'center';
+        ctx.fillText('观察者人眼', eyeX, eyeY + 28);
+
+        ctx.restore();
+      }
+
+      function drawRaySegment(seg, isCurrentlyAnimating) {
+        ctx.save();
+        const isTransmitted = seg.type === 'transmitted';
+        const baseColor = isTransmitted ? '#ffea00' : '#ff5722';
+
+        ctx.globalAlpha = Math.max(0.18, seg.opacity);
+        ctx.strokeStyle = baseColor;
+        ctx.shadowColor = baseColor;
+        ctx.shadowBlur = isTransmitted ? 12 : 8;
+        ctx.lineWidth = isTransmitted ? Math.max(1.8, 3.4 * seg.opacity) : 2.3;
+
+        ctx.beginPath();
+        ctx.moveTo(seg.x1, seg.y1);
+        ctx.lineTo(seg.x2, seg.y2);
+        ctx.stroke();
+
+        // Direction arrowhead in the middle or leading tip of the ray
+        const dx = seg.x2 - seg.x1;
+        const len = Math.abs(dx);
+        if (len > 22) {
+          const dir = dx >= 0 ? 1 : -1;
+          const arrowX = isCurrentlyAnimating ? seg.x2 : seg.x1 + dx * 0.55;
+          const arrowY = seg.y2;
+
+          ctx.fillStyle = baseColor;
+          ctx.beginPath();
+          ctx.moveTo(arrowX, arrowY);
+          ctx.lineTo(arrowX - dir * 8, arrowY - 4.2);
+          ctx.lineTo(arrowX - dir * 8, arrowY + 4.2);
+          ctx.closePath();
+          ctx.fill();
+        }
+
+        // Photon glowing head on actively moving segments
+        if (isCurrentlyAnimating) {
+          ctx.fillStyle = '#ffffff';
+          ctx.shadowColor = baseColor;
+          ctx.shadowBlur = 16;
+          ctx.beginPath();
+          ctx.arc(seg.x2, seg.y2, 4, 0, Math.PI * 2);
+          ctx.fill();
+        }
+
+        // Label near left canvas boundary for transmitted rays ("→ 第n像")
+        if (isTransmitted && seg.label) {
+          ctx.globalAlpha = Math.max(0.55, seg.opacity);
+          ctx.fillStyle = 'rgba(10, 10, 18, 0.85)';
+          ctx.fillRect(8, seg.y2 - 10, 68, 19);
+          ctx.strokeStyle = 'rgba(255, 234, 0, 0.45)';
+          ctx.lineWidth = 1;
+          ctx.strokeRect(8, seg.y2 - 10, 68, 19);
+
+          ctx.fillStyle = '#ffea00';
+          ctx.shadowBlur = 4;
+          ctx.font = 'bold 11.5px ' + getComputedStyle(document.body).fontFamily;
+          ctx.textAlign = 'left';
+          ctx.fillText(seg.label, 14, seg.y2 + 4);
+        }
+
+        ctx.restore();
+      }
+
+      function drawLightSource(layout) {
+        const { sourceX, sourceY, halfMirrorX, fullMirrorX, mirrorBottomY } = layout;
+
+        ctx.save();
+
+        // Horizontal principal axis drag track inside the cavity
+        ctx.strokeStyle = 'rgba(255, 234, 0, 0.25)';
+        ctx.lineWidth = 1.5;
+        ctx.setLineDash([4, 4]);
+        ctx.beginPath();
+        ctx.moveTo(halfMirrorX, sourceY);
+        ctx.lineTo(fullMirrorX, sourceY);
+        ctx.stroke();
+        ctx.setLineDash([]);
+
+        // Outer radial glow halo around the light source
+        const haloRadius = state.isDraggingSource || state.isHoveringSource ? 26 : 21;
+        const grad = ctx.createRadialGradient(sourceX, sourceY, 2, sourceX, sourceY, haloRadius);
+        grad.addColorStop(0, 'rgba(255, 234, 0, 0.95)');
+        grad.addColorStop(0.4, 'rgba(255, 200, 0, 0.45)');
+        grad.addColorStop(1, 'rgba(255, 234, 0, 0)');
+        ctx.fillStyle = grad;
+        ctx.beginPath();
+        ctx.arc(sourceX, sourceY, haloRadius, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Core yellow glowing point
+        ctx.fillStyle = '#ffea00';
+        ctx.shadowColor = '#ffea00';
+        ctx.shadowBlur = 14;
+        ctx.beginPath();
+        ctx.arc(sourceX, sourceY, 7.5, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Bright white center core
+        ctx.fillStyle = '#ffffff';
+        ctx.beginPath();
+        ctx.arc(sourceX, sourceY, 3, 0, Math.PI * 2);
+        ctx.fill();
+
+        // If in Error Demo mode, draw physical obstruction barrier icon right on the light source
+        if (state.animMode === 'error_demo') {
+          ctx.strokeStyle = '#ff3366';
+          ctx.lineWidth = 2.5;
+          ctx.shadowColor = '#ff3366';
+          ctx.shadowBlur = 10;
+          ctx.beginPath();
+          ctx.arc(sourceX, sourceY, 13, 0, Math.PI * 2);
+          ctx.stroke();
+
+          ctx.fillStyle = '#ff3366';
+          ctx.font = 'bold 12px ' + getComputedStyle(document.body).fontFamily;
+          ctx.textAlign = 'center';
+          ctx.fillText('✕ 光路被光源自身阻断', sourceX + 18, sourceY + 32);
+        } else {
+          // Label for draggable light source
+          ctx.fillStyle = '#fde047';
+          ctx.shadowBlur = 0;
+          ctx.font = '600 11.5px ' + getComputedStyle(document.body).fontFamily;
+          ctx.textAlign = 'center';
+          ctx.fillText('发光点 (可拖动)', sourceX, mirrorBottomY + 20);
+        }
+
+        ctx.restore();
+      }
+
+      function drawVirtualImageDepthAxis(layout) {
+        const {
+          depthAxisY,
+          depthAxisRightX,
+          depthAxisLeftX,
+          mapOpticalPathToX,
+          getLayerY
+        } = layout;
+
+        ctx.save();
+
+        // Axis title header
+        ctx.fillStyle = '#94a3b8';
+        ctx.font = '600 12px ' + getComputedStyle(document.body).fontFamily;
+        ctx.textAlign = 'left';
+        ctx.fillText('← 虚像深度轴（累计光程等比映射）', depthAxisLeftX, depthAxisY - 38);
+
+        // Origin badge at Half-Mirror plane
+        ctx.fillStyle = '#00e5ff';
+        ctx.font = '11px "JetBrains Mono", monospace';
+        ctx.textAlign = 'center';
+        ctx.fillText('0 (半透镜基准面)', depthAxisRightX, depthAxisY + 28);
+
+        // Vertical dashed reference line from Half-Mirror bottom down to the Depth Axis origin
+        ctx.strokeStyle = 'rgba(0, 229, 255, 0.3)';
+        ctx.lineWidth = 1.2;
+        ctx.setLineDash([4, 4]);
+        ctx.beginPath();
+        ctx.moveTo(depthAxisRightX, layout.mirrorBottomY);
+        ctx.lineTo(depthAxisRightX, depthAxisY + 8);
+        ctx.stroke();
+        ctx.setLineDash([]);
+
+        // Main horizontal Depth Axis line (extending leftward from Half-Mirror)
+        const axisGrad = ctx.createLinearGradient(depthAxisRightX, 0, depthAxisLeftX, 0);
+        axisGrad.addColorStop(0, '#00e5ff');
+        axisGrad.addColorStop(0.3, '#475569');
+        axisGrad.addColorStop(1, '#334155');
+        ctx.strokeStyle = axisGrad;
+        ctx.lineWidth = 2.2;
+        ctx.beginPath();
+        ctx.moveTo(depthAxisRightX, depthAxisY);
+        ctx.lineTo(depthAxisLeftX, depthAxisY);
+        // Leftward arrow tip at the deep end of the axis
+        ctx.lineTo(depthAxisLeftX + 8, depthAxisY - 5);
+        ctx.moveTo(depthAxisLeftX, depthAxisY);
+        ctx.lineTo(depthAxisLeftX + 8, depthAxisY + 5);
+        ctx.stroke();
+
+        // Draw graduation ticks along the Virtual Image Depth Axis
+        ctx.strokeStyle = '#334155';
+        ctx.fillStyle = '#64748b';
+        ctx.lineWidth = 1;
+        ctx.font = '10px "JetBrains Mono", monospace';
+        ctx.textAlign = 'center';
+
+        const tickInterval = state.mirrorGap >= 110 ? 300 : state.mirrorGap >= 70 ? 200 : 100;
+        for (let optDist = tickInterval; optDist <= 1800; optDist += tickInterval) {
+          const tx = mapOpticalPathToX(optDist);
+          if (tx <= depthAxisLeftX + 18) break;
+          ctx.beginPath();
+          ctx.moveTo(tx, depthAxisY - 4);
+          ctx.lineTo(tx, depthAxisY + 4);
+          ctx.stroke();
+          ctx.fillText(`${optDist}`, tx, depthAxisY + 16);
+        }
+
+        // Draw ghost/preview slots for theoretical layers, and glowing markers for formed virtual images
+        for (let i = 0; i < state.formedImages.length; i++) {
+          const img = state.formedImages[i];
+          const imgX = mapOpticalPathToX(img.opticalPath);
+          const rayY = getLayerY(img.layer);
+
+          ctx.save();
+
+          // Vertical dashed projection line from the transmitted ray lane down to the virtual image marker
+          ctx.strokeStyle = `rgba(255, 234, 0, ${Math.max(0.15, img.opacity * 0.4)})`;
+          ctx.lineWidth = 1;
+          ctx.setLineDash([3, 3]);
+          ctx.beginPath();
+          ctx.moveTo(imgX, rayY);
+          ctx.lineTo(imgX, depthAxisY);
+          ctx.stroke();
+          ctx.setLineDash([]);
+
+          // Outer glow aura with exact layer opacity
+          ctx.globalAlpha = img.opacity;
+          const haloR = 18;
+          const aura = ctx.createRadialGradient(imgX, depthAxisY, 2, imgX, depthAxisY, haloR);
+          aura.addColorStop(0, 'rgba(255, 234, 0, 1)');
+          aura.addColorStop(0.5, 'rgba(255, 200, 0, 0.45)');
+          aura.addColorStop(1, 'rgba(255, 234, 0, 0)');
+          ctx.fillStyle = aura;
+          ctx.beginPath();
+          ctx.arc(imgX, depthAxisY, haloR, 0, Math.PI * 2);
+          ctx.fill();
+
+          // Glowing yellow virtual image core
+          ctx.fillStyle = '#ffea00';
+          ctx.shadowColor = '#ffea00';
+          ctx.shadowBlur = 12;
+          ctx.beginPath();
+          ctx.arc(imgX, depthAxisY, 6.5, 0, Math.PI * 2);
+          ctx.fill();
+
+          // Label "第n像" and opacity value
+          ctx.shadowBlur = 0;
+          const labelY = img.layer % 2 === 1 ? depthAxisY - 15 : depthAxisY - 27;
+          ctx.fillStyle = '#ffea00';
+          ctx.font = 'bold 12px ' + getComputedStyle(document.body).fontFamily;
+          ctx.textAlign = 'center';
+          ctx.fillText(`第${img.layer}像`, imgX, labelY);
+
+          ctx.fillStyle = '#cbd5e1';
+          ctx.font = '10px "JetBrains Mono", monospace';
+          ctx.fillText(`α=${img.opacity.toFixed(2)}`, imgX, depthAxisY + 29);
+
+          ctx.restore();
+        }
+
+        ctx.restore();
+      }
+
+      function resolveCompletedSegment(seg, layout) {
+        if (seg.x1 !== undefined) return seg;
+        const yCur = layout.getLayerY(seg.layer);
+        if (seg.kind === 'error_transmitted') {
+          return { ...seg, x1: layout.sourceX, y1: yCur, x2: 0, y2: yCur };
+        }
+        if (seg.kind === 'source_to_full') {
+          return { ...seg, x1: layout.sourceX, y1: yCur, x2: layout.fullMirrorX, y2: yCur };
+        }
+        if (seg.kind === 'full_to_half') {
+          return { ...seg, x1: layout.fullMirrorX, y1: yCur, x2: layout.halfMirrorX, y2: yCur };
+        }
+        if (seg.kind === 'half_transmitted') {
+          return { ...seg, x1: layout.halfMirrorX, y1: yCur, x2: 0, y2: yCur };
+        }
+        if (seg.kind === 'half_to_full') {
+          const yNext = layout.getLayerY(seg.layer + 1);
+          const reflY = yCur + (yNext - yCur) * 0.5;
+          return { ...seg, x1: layout.halfMirrorX, y1: reflY, x2: layout.fullMirrorX, y2: reflY };
+        }
+        return seg;
+      }
+
+      function renderCanvas() {
+        const layout = getCanvasLayout();
+        drawBackgroundGrid(layout);
+        drawMirrorsAndCavity(layout);
+
+        // Draw completed ray segments dynamically resolved to current layout
+        for (let i = 0; i < state.completedSegments.length; i++) {
+          drawRaySegment(resolveCompletedSegment(state.completedSegments[i], layout), false);
+        }
+
+        // Draw currently animating ray segments
+        for (let i = 0; i < state.activeSegments.length; i++) {
+          drawRaySegment(state.activeSegments[i], true);
+        }
+
+        drawObserverEye(layout);
+        drawLightSource(layout);
+        drawVirtualImageDepthAxis(layout);
+        drawTunnelInsetPreview(layout);
+      }
+
+      // =========================================================================
+      // Main Animation Loop
+      // =========================================================================
+      function animationLoop(now) {
+        const dt = Math.min(0.1, (now - state.lastFrameTime) / 1000);
+        state.lastFrameTime = now;
+
+        updateAnimation(dt);
+        renderCanvas();
+
+        requestAnimationFrame(animationLoop);
+      }
+
+      // =========================================================================
+      // Interactive Light Source Dragging on Canvas
+      // =========================================================================
+      function getPointerPos(evt) {
+        const rect = canvas.getBoundingClientRect();
+        const clientX = evt.touches ? evt.touches[0].clientX : evt.clientX;
+        const clientY = evt.touches ? evt.touches[0].clientY : evt.clientY;
+        return {
+          x: clientX - rect.left,
+          y: clientY - rect.top
+        };
+      }
+
+      function isNearLightSource(pos, layout) {
+        const dx = pos.x - layout.sourceX;
+        const dy = pos.y - layout.sourceY;
+        return Math.hypot(dx, dy) <= 22;
+      }
+
+      canvas.addEventListener('pointerdown', (evt) => {
+        if (state.animMode === 'error_demo') return;
+        const layout = getCanvasLayout();
+        const pos = getPointerPos(evt);
+
+        if (isNearLightSource(pos, layout)) {
+          state.isDraggingSource = true;
+          state.savedDistFromFullMirror = state.distFromFullMirror;
+          canvas.setPointerCapture(evt.pointerId);
+          canvas.style.cursor = 'grabbing';
+        }
+      });
+
+      canvas.addEventListener('pointermove', (evt) => {
+        const layout = getCanvasLayout();
+        const pos = getPointerPos(evt);
+
+        if (!state.isDraggingSource) {
+          const hovering = isNearLightSource(pos, layout);
+          state.isHoveringSource = hovering;
+          canvas.style.cursor = hovering ? 'grab' : 'default';
+          return;
+        }
+
+        // Calculate new horizontal position inside the cavity
+        const clampedMaxX = layout.fullMirrorX - 4;
+        const targetX = Math.min(clampedMaxX, pos.x);
+        const distFromHalf = targetX - layout.halfMirrorX;
+
+        // Check if dragged closer than 15px to Half-Mirror!
+        if (distFromHalf < MIN_HALF_MIRROR_DIST) {
+          // Immediately bounce back and show warning prompt!
+          state.isDraggingSource = false;
+          canvas.style.cursor = 'default';
+          state.distFromFullMirror = DEFAULT_FULL_MIRROR_DIST;
+          for (let i = 0; i < state.formedImages.length; i++) {
+            const img = state.formedImages[i];
+            img.opticalPath = state.distFromFullMirror + (2 * img.layer - 1) * state.mirrorGap;
+          }
+          showCanvasToast('光源不能贴近半透镜，否则光路会被阻断', 3200);
+          updateTelemetryUI();
+          return;
+        }
+
+        state.distFromFullMirror = Math.round(layout.fullMirrorX - targetX);
+        for (let i = 0; i < state.formedImages.length; i++) {
+          const img = state.formedImages[i];
+          img.opticalPath = state.distFromFullMirror + (2 * img.layer - 1) * state.mirrorGap;
+        }
+        updateTelemetryUI();
+      });
+
+      window.addEventListener('pointerup', () => {
+        if (state.isDraggingSource) {
+          state.isDraggingSource = false;
+          canvas.style.cursor = 'default';
+        }
+      });
+
+      // =========================================================================
+      // Control Panel Event Listeners
+      // =========================================================================
+      reflectivitySlider.addEventListener('input', () => {
+        const val = Number(reflectivitySlider.value);
+        reflectivitySliderVal.textContent = `${val}%`;
+        state.pendingReflectivity = val / 100;
+
+        if (Math.abs(state.pendingReflectivity - state.reflectivity) > 0.005) {
+          reflectivityPendingHint.classList.add('active');
+        } else {
+          reflectivityPendingHint.classList.remove('active');
+        }
+      });
+
+      mirrorGapSlider.addEventListener('input', () => {
+        const newGap = Number(mirrorGapSlider.value);
+        mirrorGapSliderVal.textContent = `${newGap} px`;
+        state.mirrorGap = newGap;
+
+        // Keep light source at safe distance from Half-Mirror when shrinking cavity
+        if (state.animMode !== 'error_demo') {
+          const maxAllowedDistFromFull = state.mirrorGap - MIN_HALF_MIRROR_DIST;
+          if (state.distFromFullMirror > maxAllowedDistFromFull) {
+            state.distFromFullMirror = Math.max(6, maxAllowedDistFromFull);
+          }
+        }
+
+        // Recompute optical paths of any already-formed virtual images so the depth axis updates live
+        for (let i = 0; i < state.formedImages.length; i++) {
+          const img = state.formedImages[i];
+          if (state.animMode !== 'error_demo') {
+            img.opticalPath = state.distFromFullMirror + (2 * img.layer - 1) * state.mirrorGap;
+          }
+        }
+
+        updateTelemetryUI();
+      });
+
+      btnEmit.addEventListener('click', () => {
+        // Apply pending reflectivity if user adjusted slider and clicked Emit directly
+        if (Math.abs(state.pendingReflectivity - state.reflectivity) > 0.005) {
+          state.reflectivity = state.pendingReflectivity;
+          reflectivityPendingHint.classList.remove('active');
+          computeOpticalModel(state.reflectivity);
+        }
+        startNormalRayEmission();
+      });
+
+      btnResetEmit.addEventListener('click', () => {
+        triggerResetAndEmit();
+      });
+
+      btnPauseResume.addEventListener('click', () => {
+        if (state.animMode !== 'running' && state.animMode !== 'error_demo') return;
+        state.isPaused = !state.isPaused;
+        if (state.isPaused) {
+          btnPauseResumeText.textContent = '▶ 继续光路';
+          setStatusBanner('idle', '光路已暂停：点击“继续光路”恢复播放');
+        } else {
+          btnPauseResumeText.textContent = '⏸ 光路暂停';
+          setStatusBanner(
+            state.animMode === 'error_demo' ? 'error' : 'running',
+            state.animMode === 'error_demo'
+              ? '光路被阻断：无法形成循环反射'
+              : `正在演示光路：第 ${state.activeCycleIndex} 层往返进行中...`
+          );
+        }
+      });
+
+      btnErrorDemo.addEventListener('click', () => {
+        startErrorDemo();
+      });
+
+      window.addEventListener('resize', () => {
+        resizeCanvas();
+        updateTelemetryUI();
+      });
+
+      // =========================================================================
+      // Initialization
+      // =========================================================================
+      function init() {
+        resizeCanvas();
+        computeOpticalModel(state.reflectivity);
+        updateTelemetryUI();
+        requestAnimationFrame(animationLoop);
+      }
+
+      init();
+    })();
+  </script>
+</body>
+</html>
